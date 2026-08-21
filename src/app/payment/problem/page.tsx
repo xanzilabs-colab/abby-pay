@@ -1,0 +1,3 @@
+export default function PaymentProblemPage() {
+  return <main className="grid min-h-screen place-items-center bg-stone-100 p-6 text-stone-900"><section className="w-full max-w-lg border border-stone-300 bg-white p-8 text-center shadow-[6px_6px_0_0_#b45309]"><p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-700">AbbyPay secure checkout</p><h1 className="mt-3 text-3xl font-semibold">Checkout is not ready</h1><p className="mt-4 text-sm leading-6 text-stone-600">This payment link could not open a secure checkout. Return to WhatsApp and ask the seller to send a new link.</p></section></main>;
+}

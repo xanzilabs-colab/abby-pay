@@ -12,5 +12,10 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
 
   if (!transaction) return NextResponse.redirect(new URL("/payment/cancelled", request.url));
   const listing = Array.isArray(transaction.listings) ? transaction.listings[0] : transaction.listings;
-  return NextResponse.redirect(createPayFastPaymentUrl(transaction.transaction_id, transaction.amount_cents, listing?.title ?? "AbbyPay purchase"));
+  try {
+    return NextResponse.redirect(createPayFastPaymentUrl(transaction.transaction_id, transaction.amount_cents, listing?.title ?? "AbbyPay purchase"));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Checkout configuration is unavailable.";
+    return NextResponse.redirect(new URL(`/payment/problem?reason=${encodeURIComponent(reason)}`, request.url));
+  }
 }
