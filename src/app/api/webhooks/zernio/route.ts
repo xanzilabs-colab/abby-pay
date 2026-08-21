@@ -52,7 +52,14 @@ export async function POST(request: NextRequest) {
     const inbound = parseZernioMessage(payload);
     if (!inbound) return NextResponse.json({ received: true });
     const supabase = createServiceClient();
-    await supabase.from("messages").insert({ whatsapp_number: inbound.from, direction: "inbound", message_type: inbound.messageType, body: inbound.text || null, media_url: inbound.mediaUrl ?? null, raw_payload: inbound.raw });
+    const eventId = typeof payload.id === "string" ? payload.id : null;
+    if (eventId) {
+      const { data: previousEvent } = await supabase.from("messages").select("id").eq("direction", "inbound").contains("raw_payload", { id: eventId }).maybeSingle();
+      if (previousEvent) return NextResponse.json({ received: true, duplicate: true });
+    }
+    const { error: inboundInsertError } = await supabase.from("messages").insert({ whatsapp_number: inbound.from, direction: "inbound", message_type: inbound.messageType, body: inbound.text || null, media_url: inbound.mediaUrl ?? null, raw_payload: inbound.raw });
+    if (inboundInsertError?.code === "23505") return NextResponse.json({ received: true, duplicate: true });
+    if (inboundInsertError) throw inboundInsertError;
 
     const normalizedText = inbound.text.toUpperCase();
     const state = await getState(inbound.from);
