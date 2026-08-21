@@ -29,7 +29,8 @@ export function parseZernioMessage(payload: ZernioResource): InboundZernioMessag
   const accountId = account._id ?? account.id ?? message.accountId;
   if (!from || !conversationId || !accountId) return null;
   const mediaUrl = image?.url ?? media?.url ?? attachment?.url ?? attachment?.refreshUrl ?? root.media?.url;
-  const attachmentType = attachment?.type ?? attachment?.mimeType ?? media?.type;
+  const attachmentPayload = attachment?.payload as ZernioResource | undefined;
+  const attachmentType = attachmentPayload?.mimeType ?? attachment?.mimeType ?? attachment?.type ?? media?.type;
   return {
     from: String(from),
     text: String((typeof text === "string" ? text : text?.body) ?? message.message ?? root.text ?? "").trim(),
@@ -97,4 +98,8 @@ export async function getZernioWhatsAppNumber(accountId: string) {
   const accounts = await listZernioAccounts();
   const account = accounts.find((item) => String(item._id ?? item.id) === accountId);
   return String(account?.phone_number ?? account?.phone ?? account?.whatsapp_number ?? "").replace(/\D/g, "");
+}
+
+export function isZernioMediaUrl(url: string) {
+  return url.startsWith(`${ZERNIO_BASE_URL}/`);
 }

@@ -3,7 +3,7 @@ import { askGemini, extractListingsFromDocument, ImportedListing, matchEvidence 
 import { botResponses } from "@/lib/bot-responses";
 import { createPayFastPaymentUrl } from "@/lib/payfast";
 import { createServiceClient } from "@/lib/supabase";
-import { getZernioWhatsAppNumber, parseZernioMessage, sendZernioMessage } from "@/lib/zernio";
+import { getZernioWhatsAppNumber, isZernioMediaUrl, parseZernioMessage, sendZernioMessage } from "@/lib/zernio";
 
 type Draft = { stage: string; listingId?: string; title?: string; priceCents?: number; description?: string; importedItems?: ImportedListing[] };
 const listingCode = /^L-[A-Z0-9]{4}$/i;
@@ -27,7 +27,10 @@ async function getState(phone: string): Promise<Draft> {
 }
 
 async function copyMediaToStorage(url: string, path: string) {
-  const response = await fetch(url);
+  const zernioApiKey = process.env.ZERNIO_API_KEY;
+  const response = await fetch(url, {
+    headers: isZernioMediaUrl(url) && zernioApiKey ? { Authorization: `Bearer ${zernioApiKey}` } : undefined,
+  });
   if (!response.ok) throw new Error("Unable to download image from Zernio.");
   const contentType = response.headers.get("content-type") ?? "image/jpeg";
   const bytes = new Uint8Array(await response.arrayBuffer());
