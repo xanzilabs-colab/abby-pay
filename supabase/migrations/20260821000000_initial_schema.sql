@@ -30,6 +30,7 @@ create table public.transactions (
   merchant_id uuid not null references public.merchants(id),
   buyer_whatsapp_number text not null,
   amount_cents integer not null check (amount_cents > 0),
+  checkout_token uuid not null unique default gen_random_uuid(),
   status text not null default 'pending_payment' check (status in ('pending_payment', 'paid', 'awaiting_fulfilment', 'awaiting_buyer_confirmation', 'released', 'disputed', 'refunded', 'cancelled')),
   payfast_payment_id text,
   payfast_pf_payment_id text,

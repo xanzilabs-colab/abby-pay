@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askGemini, extractListingsFromDocument, ImportedListing, matchEvidence } from "@/lib/evidence-match";
 import { botResponses } from "@/lib/bot-responses";
-import { createPayFastPaymentUrl } from "@/lib/payfast";
 import { createServiceClient } from "@/lib/supabase";
 import { getZernioWhatsAppNumber, isZernioMediaUrl, parseZernioMessage, sendZernioMessage } from "@/lib/zernio";
 
@@ -175,7 +174,9 @@ export async function POST(request: NextRequest) {
       const transactionId = shortCode("T");
       const { data: transaction, error } = await supabase.from("transactions").insert({ transaction_id: transactionId, listing_id: listing.id, merchant_id: listing.merchant_id, buyer_whatsapp_number: inbound.from, amount_cents: listing.price_cents, payfast_payment_id: transactionId }).select().single();
       if (error) throw error;
-      const paymentUrl = createPayFastPaymentUrl(transactionId, listing.price_cents, listing.title);
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (!appUrl || !transaction.checkout_token) throw new Error("Secure checkout is not configured.");
+      const paymentUrl = `${appUrl.replace(/\/$/, "")}/pay/${transaction.checkout_token}`;
       await saveState(inbound.from, { stage: "awaiting_payment" }, undefined, transaction.id);
       await respond(inbound, botResponses.paymentLink(paymentUrl), undefined, transaction.id);
       return NextResponse.json({ received: true });

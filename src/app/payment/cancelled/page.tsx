@@ -1,0 +1,3 @@
+export default function PaymentCancelledPage() {
+  return <main className="grid min-h-screen place-items-center bg-stone-100 p-6 text-stone-900"><section className="max-w-md border border-stone-300 bg-white p-8 text-center"><p className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">AbbyPay</p><h1 className="mt-3 text-2xl font-semibold">Payment not completed</h1><p className="mt-3 text-sm leading-6 text-stone-600">Return to WhatsApp if you need a new secure checkout link.</p></section></main>;
+}

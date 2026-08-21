@@ -1,0 +1,3 @@
+export default function PaymentCompletePage() {
+  return <main className="grid min-h-screen place-items-center bg-stone-100 p-6 text-stone-900"><section className="max-w-md border border-stone-300 bg-white p-8 text-center"><p className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">AbbyPay</p><h1 className="mt-3 text-2xl font-semibold">Payment received</h1><p className="mt-3 text-sm leading-6 text-stone-600">Your payment is being confirmed. Return to WhatsApp for the next update.</p></section></main>;
+}

@@ -12,7 +12,7 @@ export const botResponses = {
   buyerListingMissing: "Send the Listing ID from the seller, for example L-4F2A.",
   buyerConfirm: (title: string, price: string, trust: number) =>
     `${title} costs ${price}. Seller trust score: ${trust.toFixed(2)}. Reply YES to pay securely or NO to cancel.`,
-  paymentLink: (url: string) => `Your payment is protected by AbbyPay. Pay securely here: ${url}`,
+  paymentLink: (url: string) => `Your payment is protected by AbbyPay. Open your secure checkout: ${url}\n\nThis link is for this transaction only.`,
   paymentReceived: "Payment received and secured. We have asked the seller to fulfil your order.",
   sellerFulfil: "Payment is secured. Hand over the item, then send a clear photo as fulfilment evidence.",
   buyerEvidence: "The seller marked the handover complete. Please send a photo of the item you received.",
