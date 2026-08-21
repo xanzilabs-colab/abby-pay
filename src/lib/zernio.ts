@@ -63,12 +63,16 @@ export async function listZernioConversations() {
   return (Array.isArray(payload) ? payload : payload.data ?? payload.conversations ?? []) as ZernioResource[];
 }
 
-export async function sendZernioMessage(to: string, body: string, context: { conversationId?: string; accountId?: string; merchantId?: string; transactionId?: string } = {}) {
+export async function sendZernioMessage(to: string, body: string, context: { conversationId?: string; accountId?: string; merchantId?: string; transactionId?: string; attachmentUrl?: string } = {}) {
   if (!context.conversationId || !context.accountId) throw new Error("A Zernio conversation ID and account ID are required to reply.");
   const response = await fetch(`${ZERNIO_BASE_URL}/inbox/conversations/${context.conversationId}/messages`, {
     method: "POST",
     headers: zernioHeaders(),
-    body: JSON.stringify({ accountId: context.accountId, message: body }),
+    body: JSON.stringify({
+      accountId: context.accountId,
+      message: body,
+      ...(context.attachmentUrl ? { attachmentUrl: context.attachmentUrl, attachmentType: "image" } : {}),
+    }),
   });
   if (!response.ok) throw new Error(`Zernio message send failed: ${response.status}`);
   await createServiceClient().from("messages").insert({
@@ -78,6 +82,7 @@ export async function sendZernioMessage(to: string, body: string, context: { con
     transaction_id: context.transactionId ?? null,
     message_type: "text",
     body,
+    media_url: context.attachmentUrl ?? null,
   });
 }
 

@@ -40,8 +40,8 @@ async function copyMediaToStorage(url: string, path: string) {
   return supabase.storage.from("abbypay-media").getPublicUrl(path).data.publicUrl;
 }
 
-async function respond(inbound: { from: string; conversationId: string; accountId: string }, body: string, merchantId?: string, transactionId?: string) {
-  await sendZernioMessage(inbound.from, body, { conversationId: inbound.conversationId, accountId: inbound.accountId, merchantId, transactionId });
+async function respond(inbound: { from: string; conversationId: string; accountId: string }, body: string, merchantId?: string, transactionId?: string, attachmentUrl?: string) {
+  await sendZernioMessage(inbound.from, body, { conversationId: inbound.conversationId, accountId: inbound.accountId, merchantId, transactionId, attachmentUrl });
 }
 
 export async function GET(request: NextRequest) {
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
       const botNumber = accountId ? await getZernioWhatsAppNumber(accountId) : "";
       const deepLink = `https://wa.me/${botNumber}?text=${encodeURIComponent(listingId)}`;
       await saveState(inbound.from, { stage: "idle" }, merchant.id);
-      await respond(inbound, botResponses.listingCreated(listingId, deepLink), merchant.id);
+      await respond(inbound, botResponses.listingCreated(listingId, deepLink), merchant.id, undefined, photoUrl);
       return NextResponse.json({ received: true });
     }
     if (state.stage === "buyer_confirm" && state.listingId) {
@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
       if (!listing) { await respond(inbound, botResponses.buyerListingMissing); return NextResponse.json({ received: true }); }
       const merchantInfo = Array.isArray(listing.merchants) ? listing.merchants[0] : listing.merchants;
       await saveState(inbound.from, { stage: "buyer_confirm", listingId: listing.listing_id });
-      await respond(inbound, botResponses.buyerConfirm(listing.title, `R${(listing.price_cents / 100).toFixed(2)}`, Number(merchantInfo?.trust_score ?? 0)));
+      await respond(inbound, botResponses.buyerConfirm(listing.title, `R${(listing.price_cents / 100).toFixed(2)}`, Number(merchantInfo?.trust_score ?? 0)), undefined, undefined, listing.photo_url ?? undefined);
       return NextResponse.json({ received: true });
     }
     if (!merchant && normalizedText === "BUY") { await saveState(inbound.from, { stage: "idle" }); await respond(inbound, botResponses.buyerListingMissing); return NextResponse.json({ received: true }); }
