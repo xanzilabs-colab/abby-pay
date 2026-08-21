@@ -1,0 +1,11 @@
+import { requireAdmin } from "@/lib/admin-auth";
+import { verifyZernioAccount } from "@/lib/zernio";
+import { saveZernioConnection } from "@/app/admin/actions";
+
+export default async function SettingsPage() {
+  const { client } = await requireAdmin();
+  const { data } = await client.from("app_settings").select("value").eq("key", "zernio_connection").maybeSingle();
+  const stored = (data?.value ?? {}) as { account_id?: string; status?: string; last_checked_at?: string };
+  const status = stored.account_id ? await verifyZernioAccount(stored.account_id) : "Not Found";
+  return <><p className="text-xs font-semibold uppercase tracking-[0.15em] text-emerald-700">Configuration</p><h1 className="mt-1 text-3xl font-semibold">Settings</h1><section className="mt-7 max-w-2xl border border-stone-300 bg-white p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">WhatsApp connection</h2><p className="mt-1 text-sm text-stone-600">The API key stays server-side. Store only the WhatsApp account ID from Zernio.</p></div><span className={`border px-3 py-1 text-sm font-semibold ${status === "Connected" ? "border-emerald-700 bg-emerald-50 text-emerald-800" : status === "Error" ? "border-red-700 bg-red-50 text-red-800" : "border-stone-300 bg-stone-50 text-stone-600"}`}>{status}</span></div><form action={saveZernioConnection} className="mt-7"><label className="block text-sm font-medium">Zernio WhatsApp Account ID<input name="accountId" required defaultValue={stored.account_id ?? ""} placeholder="Account _id from Zernio" className="mt-2 block w-full border border-stone-300 px-3 py-2 font-mono text-sm outline-none focus:border-emerald-700" /></label><button className="mt-4 bg-emerald-800 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Verify &amp; Save</button></form>{stored.last_checked_at && <p className="mt-5 text-xs text-stone-500">Last saved check: {new Date(stored.last_checked_at).toLocaleString()}</p>}</section></>;
+}
