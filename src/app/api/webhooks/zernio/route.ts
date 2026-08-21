@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGemini, matchEvidence } from "@/lib/evidence-match";
+import { askGemini, extractListingsFromDocument, ImportedListing, matchEvidence } from "@/lib/evidence-match";
 import { botResponses } from "@/lib/bot-responses";
 import { createPayFastPaymentUrl } from "@/lib/payfast";
 import { createServiceClient } from "@/lib/supabase";
 import { getZernioWhatsAppNumber, parseZernioMessage, sendZernioMessage } from "@/lib/zernio";
 
-type Draft = { stage: string; listingId?: string; title?: string; priceCents?: number; description?: string };
+type Draft = { stage: string; listingId?: string; title?: string; priceCents?: number; description?: string; importedItems?: ImportedListing[] };
 const listingCode = /^L-[A-Z0-9]{4}$/i;
 
 function shortCode(prefix: "M" | "L" | "T") {
@@ -78,6 +78,48 @@ export async function POST(request: NextRequest) {
         await saveState(inbound.from, { stage: "seller_business" });
         await respond(inbound, botResponses.sellerBusiness);
       }
+      return NextResponse.json({ received: true });
+    }
+
+    if (merchant && normalizedText === "IMPORT") {
+      await saveState(inbound.from, { stage: "seller_import" }, merchant.id);
+      await respond(inbound, botResponses.sellerImport, merchant.id);
+      return NextResponse.json({ received: true });
+    }
+
+    if (merchant && state.stage === "seller_import") {
+      if (!inbound.mediaUrl) {
+        await respond(inbound, botResponses.sellerImport, merchant.id);
+        return NextResponse.json({ received: true });
+      }
+      const mimeType = inbound.mediaMimeType?.includes("pdf") ? "application/pdf" : "image/jpeg";
+      const importedItems = await extractListingsFromDocument(inbound.mediaUrl, mimeType);
+      if (!importedItems.length) {
+        await respond(inbound, botResponses.sellerImportNoItems, merchant.id);
+        return NextResponse.json({ received: true });
+      }
+      const summary = importedItems.map((item, index) => `${index + 1}. ${item.title} - R${(item.priceCents / 100).toFixed(2)}${item.description ? ` (${item.description})` : ""}`).join("\n");
+      await saveState(inbound.from, { stage: "seller_import_confirm", importedItems }, merchant.id);
+      await respond(inbound, botResponses.sellerImportReview(summary), merchant.id);
+      return NextResponse.json({ received: true });
+    }
+
+    if (merchant && state.stage === "seller_import_confirm") {
+      if (normalizedText !== "YES") {
+        await saveState(inbound.from, { stage: "idle" }, merchant.id);
+        await respond(inbound, "Menu import cancelled. Reply IMPORT to try another file, or SELL to create one listing.", merchant.id);
+        return NextResponse.json({ received: true });
+      }
+      const importedItems = state.importedItems ?? [];
+      if (!importedItems.length) {
+        await saveState(inbound.from, { stage: "idle" }, merchant.id);
+        await respond(inbound, botResponses.sellerImportNoItems, merchant.id);
+        return NextResponse.json({ received: true });
+      }
+      const { error } = await supabase.from("listings").insert(importedItems.map((item) => ({ listing_id: shortCode("L"), merchant_id: merchant.id, title: item.title, description: item.description, price_cents: item.priceCents })));
+      if (error) throw error;
+      await saveState(inbound.from, { stage: "idle" }, merchant.id);
+      await respond(inbound, botResponses.sellerImportComplete(importedItems.length), merchant.id);
       return NextResponse.json({ received: true });
     }
 

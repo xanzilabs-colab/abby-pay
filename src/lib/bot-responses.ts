@@ -5,6 +5,10 @@ export const botResponses = {
   sellerPrice: "New listing - Step 2 of 4: What is the price in rand? Reply with a number, for example 250.",
   sellerDescription: "New listing - Step 3 of 4: Send a short description of the item.",
   sellerPhoto: "New listing - Step 4 of 4: Send one clear photo of the item.",
+  sellerImport: "Menu import: send a menu, price list, or offerings sheet as an image or PDF. I will extract draft listings and ask you to confirm before publishing anything.",
+  sellerImportReview: (items: string) => `I found these draft listings:\n${items}\n\nReply YES to create them, or NO to cancel.`,
+  sellerImportNoItems: "I could not find any clearly priced items. Send a clearer image or PDF, or create a listing step by step with SELL.",
+  sellerImportComplete: (count: number) => `Created ${count} listing${count === 1 ? "" : "s"}. Reply SELL to create another listing.`,
   buyerListingMissing: "Send the Listing ID from the seller, for example L-4F2A.",
   buyerConfirm: (title: string, price: string, trust: number) =>
     `${title} costs ${price}. Seller trust score: ${trust.toFixed(2)}. Reply YES to pay securely or NO to cancel.`,

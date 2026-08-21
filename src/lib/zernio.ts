@@ -7,6 +7,7 @@ export interface InboundZernioMessage {
   from: string;
   text: string;
   mediaUrl?: string;
+  mediaMimeType?: string;
   messageType: "text" | "image";
   conversationId: string;
   accountId: string;
@@ -22,15 +23,18 @@ export function parseZernioMessage(payload: ZernioResource): InboundZernioMessag
   const text = message.text as ZernioResource | string | undefined;
   const image = message.image as ZernioResource | undefined;
   const media = message.media as ZernioResource | undefined;
+  const attachment = (message.attachments as ZernioResource[] | undefined)?.[0];
   const from = message.from ?? message.senderPhone ?? conversation.participantPhone ?? conversation.participantId ?? root.from ?? (root.sender?.phone as string | undefined) ?? data.from;
   const conversationId = conversation.id ?? conversation._id ?? message.conversationId;
   const accountId = account._id ?? account.id ?? message.accountId;
   if (!from || !conversationId || !accountId) return null;
-  const mediaUrl = image?.url ?? media?.url ?? root.media?.url;
+  const mediaUrl = image?.url ?? media?.url ?? attachment?.url ?? attachment?.refreshUrl ?? root.media?.url;
+  const attachmentType = attachment?.type ?? attachment?.mimeType ?? media?.type;
   return {
     from: String(from),
     text: String((typeof text === "string" ? text : text?.body) ?? message.message ?? root.text ?? "").trim(),
     mediaUrl: mediaUrl ? String(mediaUrl) : undefined,
+    mediaMimeType: attachmentType ? String(attachmentType) : undefined,
     messageType: mediaUrl ? "image" : "text",
     conversationId: String(conversationId),
     accountId: String(accountId),
