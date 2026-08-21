@@ -27,7 +27,7 @@ function getPublicAppUrl() {
 }
 
 function isSandboxMode() {
-  return process.env.PAYFAST_MODE?.toLowerCase() === "sandbox";
+  return process.env.PAYFAST_MODE?.toLowerCase() !== "live";
 }
 
 export function createPayFastPaymentUrl(transactionId: string, amountCents: number, itemName: string) {
