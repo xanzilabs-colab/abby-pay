@@ -69,7 +69,23 @@ export async function POST(request: NextRequest) {
     const { data: merchantTransaction } = merchant ? await supabase.from("transactions").select("*").eq("merchant_id", merchant.id)
       .eq("status", "awaiting_fulfilment").order("created_at", { ascending: false }).limit(1).maybeSingle() : { data: null };
 
+    // Commands always start a fresh intent, even if a prior draft was interrupted.
+    if (normalizedText === "SELL") {
+      if (merchant) {
+        await saveState(inbound.from, { stage: "seller_title" }, merchant.id);
+        await respond(inbound, botResponses.sellerTitle, merchant.id);
+      } else {
+        await saveState(inbound.from, { stage: "seller_business" });
+        await respond(inbound, botResponses.sellerBusiness);
+      }
+      return NextResponse.json({ received: true });
+    }
+
     if (state.stage === "seller_business") {
+      if (["SELL", "BUY"].includes(normalizedText) || !inbound.text.trim()) {
+        await respond(inbound, botResponses.sellerBusiness);
+        return NextResponse.json({ received: true });
+      }
       const { data: newMerchant, error } = await supabase.from("merchants").insert({ merchant_id: shortCode("M"), whatsapp_number: inbound.from, business_name: inbound.text, status: "active" }).select().single();
       if (error) throw error;
       await saveState(inbound.from, { stage: "seller_title" }, newMerchant.id);
@@ -161,7 +177,6 @@ export async function POST(request: NextRequest) {
       await respond(inbound, botResponses.buyerConfirm(listing.title, `R${(listing.price_cents / 100).toFixed(2)}`, Number(merchantInfo?.trust_score ?? 0)));
       return NextResponse.json({ received: true });
     }
-    if (!merchant && normalizedText === "SELL") { await saveState(inbound.from, { stage: "seller_business" }); await respond(inbound, botResponses.sellerBusiness); return NextResponse.json({ received: true }); }
     if (!merchant && normalizedText === "BUY") { await saveState(inbound.from, { stage: "idle" }); await respond(inbound, botResponses.buyerListingMissing); return NextResponse.json({ received: true }); }
     if (merchant && state.stage === "idle") { await saveState(inbound.from, { stage: "seller_title" }, merchant.id); await respond(inbound, botResponses.sellerTitle, merchant.id); return NextResponse.json({ received: true }); }
     if (!merchant && state.stage === "idle") { await respond(inbound, botResponses.welcome); return NextResponse.json({ received: true }); }

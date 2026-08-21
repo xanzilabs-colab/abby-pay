@@ -1,10 +1,10 @@
 export const botResponses = {
   welcome: "Welcome to AbbyPay. Are you selling or buying? Reply SELL or BUY.",
-  sellerBusiness: "Great. What is your business name?",
-  sellerTitle: "What would you like to list? Send the item name.",
-  sellerPrice: "What is the price in rand? Reply with a number, for example 250.",
-  sellerDescription: "Please send a short description of the item.",
-  sellerPhoto: "Now send one clear photo of the item.",
+  sellerBusiness: "Seller onboarding - Step 1 of 5: What is your business name?",
+  sellerTitle: "New listing - Step 1 of 4: What is the item called?",
+  sellerPrice: "New listing - Step 2 of 4: What is the price in rand? Reply with a number, for example 250.",
+  sellerDescription: "New listing - Step 3 of 4: Send a short description of the item.",
+  sellerPhoto: "New listing - Step 4 of 4: Send one clear photo of the item.",
   buyerListingMissing: "Send the Listing ID from the seller, for example L-4F2A.",
   buyerConfirm: (title: string, price: string, trust: number) =>
     `${title} costs ${price}. Seller trust score: ${trust.toFixed(2)}. Reply YES to pay securely or NO to cancel.`,
