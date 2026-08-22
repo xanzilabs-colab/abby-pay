@@ -209,18 +209,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
     if (buyerTransaction?.status === "awaiting_buyer_confirmation" && inbound.mediaUrl && buyerTransaction.seller_evidence_url) {
-      const evidenceUrl = await copyMediaToStorage(inbound.mediaUrl, `evidence/${buyerTransaction.transaction_id}-buyer.jpg`);
-      const match = await matchEvidence(buyerTransaction.seller_evidence_url, evidenceUrl);
-      const updates: Record<string, unknown> = { buyer_evidence_url: evidenceUrl, ai_match_confidence: match.confidence, ai_match_notes: match.notes };
-      if (match.confidence >= 0.85) { updates.status = "released"; updates.released_at = new Date().toISOString(); }
-      await supabase.from("transactions").update(updates).eq("id", buyerTransaction.id);
-      if (match.confidence >= 0.85) {
-        const { data: trustMerchant } = await supabase.from("merchants").select("trust_score").eq("id", buyerTransaction.merchant_id).maybeSingle();
-        if (trustMerchant) await supabase.from("merchants").update({ trust_score: Number(trustMerchant.trust_score) + 1 }).eq("id", buyerTransaction.merchant_id);
-        await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
-      } else {
+      try {
+        const evidenceUrl = await copyMediaToStorage(inbound.mediaUrl, `evidence/${buyerTransaction.transaction_id}-buyer.jpg`);
+        await supabase.from("transactions").update({ buyer_evidence_url: evidenceUrl }).eq("id", buyerTransaction.id);
+        await respond(inbound, "Evidence received. Checking it now...", buyerTransaction.merchant_id, buyerTransaction.id);
+        const match = await matchEvidence(buyerTransaction.seller_evidence_url, evidenceUrl);
+        const updates: Record<string, unknown> = { ai_match_confidence: match.confidence, ai_match_notes: match.notes };
+        if (match.confidence >= 0.85) { updates.status = "released"; updates.released_at = new Date().toISOString(); }
+        await supabase.from("transactions").update(updates).eq("id", buyerTransaction.id);
+        if (match.confidence >= 0.85) {
+          const { data: trustMerchant } = await supabase.from("merchants").select("trust_score").eq("id", buyerTransaction.merchant_id).maybeSingle();
+          if (trustMerchant) await supabase.from("merchants").update({ trust_score: Number(trustMerchant.trust_score) + 1 }).eq("id", buyerTransaction.merchant_id);
+          await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
+        } else {
+          await saveState(inbound.from, { stage: "buyer_evidence_confirmation" }, buyerTransaction.merchant_id, buyerTransaction.id);
+          await respond(inbound, botResponses.evidenceConfirm, buyerTransaction.merchant_id, buyerTransaction.id);
+        }
+      } catch (error) {
+        console.error("Buyer evidence processing failed", { transactionId: buyerTransaction.transaction_id, error });
         await saveState(inbound.from, { stage: "buyer_evidence_confirmation" }, buyerTransaction.merchant_id, buyerTransaction.id);
-        await respond(inbound, botResponses.evidenceConfirm, buyerTransaction.merchant_id, buyerTransaction.id);
+        await respond(inbound, botResponses.buyerEvidenceFallback, buyerTransaction.merchant_id, buyerTransaction.id);
       }
       return NextResponse.json({ received: true });
     }

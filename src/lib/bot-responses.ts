@@ -19,6 +19,7 @@ export const botResponses = {
   sellerCourierProof: "Send a courier proof image or PDF (tracking/delivery confirmation), or reply with the tracking number followed by DELIVERED after delivery.",
   buyerEvidence: "The seller submitted fulfilment proof. Reply YES once you have received the item, NO to dispute, or send a photo of what you received for an automatic evidence check.",
   buyerCourierEvidence: "The seller submitted courier delivery proof. Reply YES once the item is delivered, NO to dispute, or send a photo of the delivered item.",
+  buyerEvidenceFallback: "We received your evidence but could not verify it automatically. Reply YES to confirm you received the item, or NO to open a dispute.",
   evidenceConfirm: "We could not verify the handover automatically. Does this look right? Reply YES or NO.",
   fundsReleased: "The handover was confirmed. Funds have been released to the merchant.",
   disputeOpened: "Thanks. Your transaction has been escalated for manual review.",
