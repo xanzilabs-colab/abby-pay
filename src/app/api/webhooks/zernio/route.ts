@@ -182,9 +182,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true });
     }
     if (merchantTransaction && inbound.mediaUrl) {
-      const evidenceUrl = await copyMediaToStorage(inbound.mediaUrl, `evidence/${merchantTransaction.transaction_id}-seller.jpg`);
-      await supabase.from("transactions").update({ seller_evidence_url: evidenceUrl, status: "awaiting_buyer_confirmation" }).eq("id", merchantTransaction.id);
+      const evidenceUrl = await copyMediaToStorage(inbound.mediaUrl, `evidence/${merchantTransaction.transaction_id}-seller-proof.jpg`);
+      const fulfilmentMethod = merchantTransaction.fulfilment_method ?? "handover";
+      await supabase.from("transactions").update({ seller_evidence_url: evidenceUrl, delivery_evidence_url: fulfilmentMethod === "courier" ? evidenceUrl : null, status: "awaiting_buyer_confirmation" }).eq("id", merchantTransaction.id);
+      await respond(inbound, fulfilmentMethod === "courier" ? botResponses.buyerCourierEvidence : botResponses.buyerEvidence, merchant.id, merchantTransaction.id);
+      return NextResponse.json({ received: true });
+    }
+    if (merchantTransaction && ["HANDOVER", "COURIER"].includes(normalizedText)) {
+      const fulfilmentMethod = normalizedText.toLowerCase();
+      await supabase.from("transactions").update({ fulfilment_method: fulfilmentMethod }).eq("id", merchantTransaction.id);
+      await saveState(inbound.from, { stage: fulfilmentMethod === "courier" ? "seller_courier_proof" : "seller_handover_proof" }, merchant.id, merchantTransaction.id);
+      await respond(inbound, fulfilmentMethod === "courier" ? botResponses.sellerCourierProof : botResponses.sellerHandoverProof, merchant.id, merchantTransaction.id);
+      return NextResponse.json({ received: true });
+    }
+    if (merchantTransaction && state.stage === "seller_handover_proof" && normalizedText === "DELIVERED") {
+      await supabase.from("transactions").update({ fulfilment_method: "handover", status: "awaiting_buyer_confirmation" }).eq("id", merchantTransaction.id);
       await respond(inbound, botResponses.buyerEvidence, merchant.id, merchantTransaction.id);
+      return NextResponse.json({ received: true });
+    }
+    if (merchantTransaction && state.stage === "seller_courier_proof" && inbound.text.trim()) {
+      const reference = inbound.text.replace(/\s+DELIVERED$/i, "").trim();
+      const delivered = /\bDELIVERED\b/i.test(inbound.text);
+      await supabase.from("transactions").update({ fulfilment_method: "courier", fulfilment_reference: reference || null, ...(delivered ? { status: "awaiting_buyer_confirmation" } : {}) }).eq("id", merchantTransaction.id);
+      if (delivered) await respond(inbound, botResponses.buyerCourierEvidence, merchant.id, merchantTransaction.id);
+      else await respond(inbound, "Tracking reference saved. Reply DELIVERED when the courier confirms delivery, or send courier proof.", merchant.id, merchantTransaction.id);
       return NextResponse.json({ received: true });
     }
     if (buyerTransaction?.status === "awaiting_buyer_confirmation" && inbound.mediaUrl && buyerTransaction.seller_evidence_url) {
@@ -210,6 +231,18 @@ export async function POST(request: NextRequest) {
       } else {
         await supabase.from("transactions").update({ status: "disputed" }).eq("id", buyerTransaction.id);
         await supabase.from("disputes").insert({ transaction_id: buyerTransaction.id, reason: "Buyer rejected evidence confirmation" });
+        await respond(inbound, botResponses.disputeOpened, buyerTransaction.merchant_id, buyerTransaction.id);
+      }
+      await saveState(inbound.from, { stage: "idle" }, buyerTransaction.merchant_id, buyerTransaction.id);
+      return NextResponse.json({ received: true });
+    }
+    if (buyerTransaction?.status === "awaiting_buyer_confirmation" && ["YES", "NO"].includes(normalizedText)) {
+      if (normalizedText === "YES") {
+        await supabase.from("transactions").update({ status: "released", released_at: new Date().toISOString() }).eq("id", buyerTransaction.id);
+        await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
+      } else {
+        await supabase.from("transactions").update({ status: "disputed" }).eq("id", buyerTransaction.id);
+        await supabase.from("disputes").insert({ transaction_id: buyerTransaction.id, reason: "Buyer rejected fulfilment confirmation" });
         await respond(inbound, botResponses.disputeOpened, buyerTransaction.merchant_id, buyerTransaction.id);
       }
       await saveState(inbound.from, { stage: "idle" }, buyerTransaction.merchant_id, buyerTransaction.id);
