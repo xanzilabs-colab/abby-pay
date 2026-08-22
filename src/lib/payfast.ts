@@ -48,10 +48,24 @@ export function createPayFastPaymentUrl(transactionId: string, amountCents: numb
   const host = isSandboxMode() ? "sandbox.payfast.co.za" : "www.payfast.co.za";
   return `https://${host}/eng/process?${encodeFields({ ...fields, signature: sign(fields) })}`;
 }
+function getUnsignedItnBody(rawBody: string) {
+  return rawBody.split("&").filter((part) => {
+    const [encodedKey] = part.split("=", 1);
+    return decodeURIComponent(encodedKey.replace(/\+/g, " ")) !== "signature";
+  }).join("&");
+}
 
-export function verifyPayFastSignature(fields: Record<string, string>) {
-  const { signature, ...unsigned } = fields;
-  return Boolean(signature) && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(sign(unsigned)));
+function signItnBody(unsignedBody: string) {
+  const passphrase = process.env.PAYFAST_PASSPHRASE;
+  return crypto.createHash("md5").update(`${unsignedBody}${passphrase ? `&passphrase=${encodeURIComponent(passphrase).replace(/%20/g, "+")}` : ""}`).digest("hex");
+}
+
+export function verifyPayFastSignature(rawBody: string) {
+  const fields = new URLSearchParams(rawBody);
+  const signature = fields.get("signature");
+  const expectedSignature = signItnBody(getUnsignedItnBody(rawBody));
+  if (!signature || signature.length !== expectedSignature.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 }
 
 export async function validatePayFastNotification(rawBody: string) {
@@ -59,7 +73,7 @@ export async function validatePayFastNotification(rawBody: string) {
   const response = await fetch(`https://${host}/eng/query/validate`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: rawBody,
+    body: getUnsignedItnBody(rawBody),
   });
   return response.ok && (await response.text()).trim() === "VALID";
 }

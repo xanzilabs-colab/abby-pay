@@ -21,7 +21,10 @@ async function getReplyContext(whatsappNumber: string) {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const fields = Object.fromEntries(new URLSearchParams(rawBody).entries());
-  if (!verifyPayFastSignature(fields) || !(await validatePayFastNotification(rawBody))) {
+  const validSignature = verifyPayFastSignature(rawBody);
+  const validServerConfirmation = validSignature && await validatePayFastNotification(rawBody);
+  if (!validSignature || !validServerConfirmation) {
+    console.error("PayFast ITN validation failed", { transactionId: fields.m_payment_id, validSignature, validServerConfirmation });
     return NextResponse.json({ error: "Invalid ITN" }, { status: 400 });
   }
   if (fields.payment_status !== "COMPLETE") return NextResponse.json({ received: true });
