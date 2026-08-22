@@ -22,6 +22,7 @@ export const botResponses = {
   buyerEvidenceFallback: "We received your evidence but could not verify it automatically. Reply YES to confirm you received the item, or NO to open a dispute.",
   evidenceConfirm: "We could not verify the handover automatically. Does this look right? Reply YES or NO.",
   fundsReleased: "The handover was confirmed. Funds have been released to the merchant.",
+  merchantFundsReleased: "Fulfilment was confirmed. Your AbbyPay funds are now released.",
   disputeOpened: "Thanks. Your transaction has been escalated for manual review.",
   listingCreated: (listingId: string, deepLink: string) =>
     `Listing created: ${listingId}\nShare this direct buyer link: ${deepLink}\nAbbyPay does not publish listings or provide browsing.`,

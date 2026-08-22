@@ -43,6 +43,27 @@ async function respond(inbound: { from: string; conversationId: string; accountI
   await sendZernioMessage(inbound.from, body, { conversationId: inbound.conversationId, accountId: inbound.accountId, merchantId, transactionId, attachmentUrl });
 }
 
+async function notifyMerchantOfRelease(merchantId: string, transactionId: string) {
+  const supabase = createServiceClient();
+  const { data: merchant } = await supabase.from("merchants").select("whatsapp_number").eq("id", merchantId).maybeSingle();
+  if (!merchant) return;
+  const { data: message } = await supabase.from("messages").select("raw_payload")
+    .eq("whatsapp_number", merchant.whatsapp_number).eq("direction", "inbound")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const payload = message?.raw_payload as { conversation?: { id?: string }; account?: { id?: string; accountId?: string }; message?: { conversationId?: string; accountId?: string } } | null;
+  const conversationId = payload?.conversation?.id ?? payload?.message?.conversationId;
+  const accountId = payload?.account?.id ?? payload?.account?.accountId ?? payload?.message?.accountId;
+  if (!conversationId || !accountId) return;
+  await sendZernioMessage(merchant.whatsapp_number, botResponses.merchantFundsReleased, { conversationId, accountId, merchantId, transactionId });
+}
+
+async function releaseFunds(inbound: { from: string; conversationId: string; accountId: string }, transaction: { id: string; merchant_id: string }) {
+  const supabase = createServiceClient();
+  await supabase.from("transactions").update({ status: "released", released_at: new Date().toISOString() }).eq("id", transaction.id);
+  await respond(inbound, botResponses.fundsReleased, transaction.merchant_id, transaction.id);
+  await notifyMerchantOfRelease(transaction.merchant_id, transaction.id).catch((error) => console.error("Merchant release notification failed", { transactionId: transaction.id, error }));
+}
+
 export async function GET(request: NextRequest) {
   void request;
   return NextResponse.json({ received: true });
@@ -221,6 +242,7 @@ export async function POST(request: NextRequest) {
           const { data: trustMerchant } = await supabase.from("merchants").select("trust_score").eq("id", buyerTransaction.merchant_id).maybeSingle();
           if (trustMerchant) await supabase.from("merchants").update({ trust_score: Number(trustMerchant.trust_score) + 1 }).eq("id", buyerTransaction.merchant_id);
           await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
+          await notifyMerchantOfRelease(buyerTransaction.merchant_id, buyerTransaction.id).catch((error) => console.error("Merchant release notification failed", { transactionId: buyerTransaction.id, error }));
         } else {
           await saveState(inbound.from, { stage: "buyer_evidence_confirmation" }, buyerTransaction.merchant_id, buyerTransaction.id);
           await respond(inbound, botResponses.evidenceConfirm, buyerTransaction.merchant_id, buyerTransaction.id);
@@ -234,8 +256,7 @@ export async function POST(request: NextRequest) {
     }
     if (state.stage === "buyer_evidence_confirmation" && buyerTransaction) {
       if (normalizedText === "YES") {
-        await supabase.from("transactions").update({ status: "released", released_at: new Date().toISOString() }).eq("id", buyerTransaction.id);
-        await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
+        await releaseFunds(inbound, buyerTransaction);
       } else {
         await supabase.from("transactions").update({ status: "disputed" }).eq("id", buyerTransaction.id);
         await supabase.from("disputes").insert({ transaction_id: buyerTransaction.id, reason: "Buyer rejected evidence confirmation" });
@@ -246,8 +267,7 @@ export async function POST(request: NextRequest) {
     }
     if (buyerTransaction?.status === "awaiting_buyer_confirmation" && ["YES", "NO"].includes(normalizedText)) {
       if (normalizedText === "YES") {
-        await supabase.from("transactions").update({ status: "released", released_at: new Date().toISOString() }).eq("id", buyerTransaction.id);
-        await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
+        await releaseFunds(inbound, buyerTransaction);
       } else {
         await supabase.from("transactions").update({ status: "disputed" }).eq("id", buyerTransaction.id);
         await supabase.from("disputes").insert({ transaction_id: buyerTransaction.id, reason: "Buyer rejected fulfilment confirmation" });
