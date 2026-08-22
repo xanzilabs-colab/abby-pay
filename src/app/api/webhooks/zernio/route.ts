@@ -57,9 +57,11 @@ async function notifyMerchantOfRelease(merchantId: string, transactionId: string
   await sendZernioMessage(merchant.whatsapp_number, botResponses.merchantFundsReleased, { conversationId, accountId, merchantId, transactionId });
 }
 
-async function releaseFunds(inbound: { from: string; conversationId: string; accountId: string }, transaction: { id: string; merchant_id: string }) {
+async function releaseFunds(inbound: { from: string; conversationId: string; accountId: string }, transaction: { id: string; merchant_id: string; amount_cents: number }) {
   const supabase = createServiceClient();
   await supabase.from("transactions").update({ status: "released", released_at: new Date().toISOString() }).eq("id", transaction.id);
+  const { data: existingCredit } = await supabase.from("merchant_ledger_entries").select("id").eq("transaction_id", transaction.id).eq("entry_type", "release").maybeSingle();
+  if (!existingCredit) await supabase.from("merchant_ledger_entries").insert({ merchant_id: transaction.merchant_id, transaction_id: transaction.id, entry_type: "release", amount_cents: transaction.amount_cents });
   await respond(inbound, botResponses.fundsReleased, transaction.merchant_id, transaction.id);
   await notifyMerchantOfRelease(transaction.merchant_id, transaction.id).catch((error) => console.error("Merchant release notification failed", { transactionId: transaction.id, error }));
 }
@@ -101,6 +103,37 @@ export async function POST(request: NextRequest) {
         await saveState(inbound.from, { stage: "seller_business" });
         await respond(inbound, botResponses.sellerBusiness);
       }
+      return NextResponse.json({ received: true });
+    }
+
+    if (normalizedText === "MENU") {
+      await respond(inbound, merchant ? botResponses.sellerMenu : botResponses.buyerMenu, merchant?.id);
+      return NextResponse.json({ received: true });
+    }
+
+    if (merchant && normalizedText === "PAYOUT") {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (!merchant.portal_email || !appUrl) await respond(inbound, botResponses.portalEmailNeeded, merchant.id);
+      else await respond(inbound, botResponses.portalLinked(`${appUrl.replace(/\/$/, "")}/merchant`), merchant.id);
+      return NextResponse.json({ received: true });
+    }
+
+    if (merchant && normalizedText.startsWith("PORTAL")) {
+      const email = inbound.text.slice(6).trim().toLowerCase();
+      if (!/^\S+@\S+\.\S+$/.test(email)) { await respond(inbound, botResponses.portalEmailNeeded, merchant.id); return NextResponse.json({ received: true }); }
+      const { error } = await supabase.from("merchants").update({ portal_email: email }).eq("id", merchant.id);
+      if (error) throw error;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+      await respond(inbound, botResponses.portalLinked(`${appUrl?.replace(/\/$/, "") ?? ""}/merchant/login`), merchant.id);
+      return NextResponse.json({ received: true });
+    }
+
+    if (!merchant && normalizedText.startsWith("SEARCH ")) {
+      const term = inbound.text.slice(7).trim();
+      if (term.length < 2) { await respond(inbound, "Type SEARCH followed by an item or business name."); return NextResponse.json({ received: true }); }
+      const { data: matches } = await supabase.from("listings").select("listing_id,title,price_cents,merchants(business_name)").eq("status", "active").or(`title.ilike.%${term}%,description.ilike.%${term}%`).limit(8);
+      const results = (matches ?? []).map((listing) => `${listing.listing_id} - ${listing.title} · R${(listing.price_cents / 100).toFixed(2)}${(Array.isArray(listing.merchants) ? listing.merchants[0] : listing.merchants)?.business_name ? ` · ${(Array.isArray(listing.merchants) ? listing.merchants[0] : listing.merchants)?.business_name}` : ""}`).join("\n");
+      await respond(inbound, results || "No active listings matched that search. Try a different item or business name.");
       return NextResponse.json({ received: true });
     }
 
@@ -241,6 +274,8 @@ export async function POST(request: NextRequest) {
         if (match.confidence >= 0.85) {
           const { data: trustMerchant } = await supabase.from("merchants").select("trust_score").eq("id", buyerTransaction.merchant_id).maybeSingle();
           if (trustMerchant) await supabase.from("merchants").update({ trust_score: Number(trustMerchant.trust_score) + 1 }).eq("id", buyerTransaction.merchant_id);
+          const { data: existingCredit } = await supabase.from("merchant_ledger_entries").select("id").eq("transaction_id", buyerTransaction.id).eq("entry_type", "release").maybeSingle();
+          if (!existingCredit) await supabase.from("merchant_ledger_entries").insert({ merchant_id: buyerTransaction.merchant_id, transaction_id: buyerTransaction.id, entry_type: "release", amount_cents: buyerTransaction.amount_cents });
           await respond(inbound, botResponses.fundsReleased, buyerTransaction.merchant_id, buyerTransaction.id);
           await notifyMerchantOfRelease(buyerTransaction.merchant_id, buyerTransaction.id).catch((error) => console.error("Merchant release notification failed", { transactionId: buyerTransaction.id, error }));
         } else {

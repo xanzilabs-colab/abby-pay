@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const destination = new URL("/admin", requestUrl.origin);
+  const next = requestUrl.searchParams.get("next") === "/merchant" ? "/merchant" : "/admin";
+  const destination = new URL(next, requestUrl.origin);
   const response = NextResponse.redirect(destination);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

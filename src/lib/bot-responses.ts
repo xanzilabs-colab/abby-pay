@@ -9,6 +9,11 @@ export const botResponses = {
   sellerImportReview: (items: string) => `I found these draft listings:\n${items}\n\nReply YES to create them, or NO to cancel.`,
   sellerImportNoItems: "I could not find any clearly priced items. Send a clearer image or PDF, or create a listing step by step with SELL.",
   sellerImportComplete: (count: number) => `Created ${count} listing${count === 1 ? "" : "s"}. Reply SELL to create another listing.`,
+  sellerMenu: "Seller menu:\nSELL - create one listing\nIMPORT - import a menu or price list\nPORTAL email@example.com - link secure portal access\nPAYOUT - open your secure account portal",
+  portalLinked: (url: string) => `Your merchant portal is linked. Open it securely: ${url}`,
+  portalEmailNeeded: "Reply PORTAL followed by your business email, for example: PORTAL owner@example.com",
+  buyerMenu: "Buyer menu:\nSend a Listing ID to buy directly, or SEARCH followed by an item or business name.",
+  searchResults: (items: string) => `Matching listings:\n${items}\n\nSend a Listing ID to continue securely.`,
   buyerListingMissing: "Send the Listing ID from the seller, for example L-4F2A.",
   buyerConfirm: (title: string, price: string, trust: number) =>
     `${title} costs ${price}. Seller trust score: ${trust.toFixed(2)}. Reply YES to pay securely or NO to cancel.`,
